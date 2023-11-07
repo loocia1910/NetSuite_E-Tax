@@ -1,3 +1,4 @@
+const { log } = require("util");
 
 
 /**
@@ -16,36 +17,37 @@ define([
 ], function(CryptoJS, record, https, runtime, search, error, format) {
 
 
-    function post(requestBody) {
+    async function post(requestBody) {
         try {
             let response = {
-                SubmitID: ''
+                SubmitID: '',
+                rowRecordId: null
             }
-            log.debug('post 요청__ll_create  invoiceInfoList ==== ', invoiceInfoList);
-
+            
             const parsedBody = JSON.parse(requestBody);
             const invoiceInfoList = parsedBody.invoiceInfoList;
             const SubmitID = parsedBody.SubmitID;
+            log.debug('post 요청__ll_create  invoiceInfoList ==== ', invoiceInfoList);
+            log.debug('post 요청__ll_create  invoiceInfoList.length ==== ', invoiceInfoList.length);
             
             // 1. record에서 개별 invoice 정보들 찾기
             // 2. 찾은 정보로 taxInvoice 리스트 생성 (submitId 생성 규칙 : 고객번 + invoice_number 사용)
             // 3. popbill TOKEN 생성 
             // 4. popbill bulkSubmit 요청
             const invoiceList = searchInvoiceList(invoiceInfoList);
-            // const BulkRequestBody = setBulkReqBody(invoiceList);
-            // const res = createBulkSubmit(SubmitID, BulkRequestBody);
+            const BulkRequestBody = setBulkReqBody(invoiceList);
+            const res = await createBulkSubmit(SubmitID, BulkRequestBody);
             // log.debug("res ---- ", res)
-            // log.debug("res.code  === 1 ---- ", res.code === 1)
-            // log.debug("stringify(res).code ---- ", stringify(res).code)
-
 
             // 5. RECODRD : CUSTOMER_LEDGER bulksubmit flag 
             // 6. RECODRD : TAX_INVOICE_SUBMIT_LOG 상태 저장
-            // if(res.code === 1) {
-            //     setCLBulkSubmitFlag(SubmitID, invoiceList);  // invoiceList에서 search 되 record International ID를 가지고, submitID와 flag - '1' 일괄 저장
-            //     setBulkSubmitLog(SubmitID)
-            //     response.SubmitID = SubmitID;
-            // }
+            if(res.code === 1) {
+                setCLBulkSubmitFlag(SubmitID, invoiceList);  // invoiceList에서 search 되 record International ID를 가지고, submitID와 flag - '1' 일괄 저장
+                const res = setBulkSubmitLog(SubmitID)
+                response = res;
+            }
+
+            log.debug("서버로 가기전 response --- ", response)
 
             return JSON.stringify(response);
 
@@ -73,8 +75,6 @@ define([
                 etaxRecord.setValue(prefix + 'flag', '1'); // '1' : bulkSbumit API 호출 - yes
                 etaxRecord.setValue(prefix + 'submit_id', SubmitID);
                 etaxRecord.save();
-
-                log.debug('etaxRecord.save 후 ---', etaxRecord);
             });
 
 
@@ -105,6 +105,9 @@ define([
             submitLogRecord.setValue(prefix + 'request_date', new Date());
             submitLogRecord.save();
 
+            log.debug('submitLogRecord.save 후 submitLogRecord.id ---', submitLogRecord.id);
+
+            return { SubmitID, rowRecordId : submitLogRecord.id }
         } catch(err) {
             throw error.create({
                 name: 'setBulkSubmitFlag Fail',
@@ -114,22 +117,20 @@ define([
     } 
 
     const searchInvoiceList = (paramArray) => {
-        log.debug("searchInvoiceList paramArray ", paramArray)
-        // subsidiary_id, transaction_id
-            const prefix = 'custrecord_ko_cl_';
+            const prefix = 'custrecord_ko_cl_'; 
             let transactionFilters = [];
             /* transaction_id 필터 생성 */
             if (paramArray) {
                 for (let obj of paramArray) {
-                    transactionFilters.push([prefix + 'transaction_id', search.Operator.IS, obj.transaction_id]); // transaction_id 
-                    // transactionFilters.push('and')
-                    // transactionFilters.push([prefix + 'flag', search.Operator.ISNOT, '1'] , 'or', [prefix + 'flag', search.Operator.ISNOT, '2'] ); // flag 값이 '1'이나 '2'가 아닌 것 (bulkSbumit 또는 getBulkSumbitResult 호출하지 않은 것)
+                    transactionFilters.push([prefix + 'transaction_id', search.Operator.IS, obj.transaction_id]);
+                    transactionFilters.push('and')
+                    transactionFilters.push([prefix + 'flag', search.Operator.ISNOT, '1'], 'and', [prefix + 'flag', search.Operator.ISNOT, '2']) // flag 값이 '1'이나 '2'가 아닌 것 (bulkSbumit 또는 getBulkSumbitResult 호출하지 않은 것)
                     transactionFilters.push('or')
+                    //transactionFilters.push([ [prefix + 'flag', search.Operator.ISNOT, '1'], 'and', [prefix + 'flag', search.Operator.ISNOT, '2'] ]) // flag 값이 '1'이나 '2'가 아닌 것 (bulkSbumit 또는 getBulkSumbitResult 호출하지 않은 것)
                 }
 
-                transactionFilters.pop();
+                transactionFilters.pop(); // 마지막 'or' 제거
             }
-            log.debug("transactionFilters ---", transactionFilters)
             
             /* transaction_id 를 DESC 하기 위한 컬럼변수 */
             const tranIdCol = search.createColumn({
@@ -189,7 +190,6 @@ define([
                 return true;
             });
 
-            log.debug('clSearch results.length : ', results.length);
 
             return results;
 
