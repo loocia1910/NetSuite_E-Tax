@@ -210,7 +210,7 @@ define(['N/currentRecord', 'N/url', 'N/runtime', 'N/record', 'N/search', 'N/ui/d
 
             // 작성회사(Subsidiary_id) 필드 V 값 (1)
             var subsidiary_id = curRecord.getValue('custpage_kor_etax_field_subdiary_id');
-            // 서비스/과세 일자 필드 TEXT값
+            // 서비스/세금 일자 필드 TEXT값
             var tax_date = curRecord.getText('custpage_kor_etax_field_tax_date');
             // var tax_date_val = curRecord.getValue('custpage_kor_etax_field_tax_date');
             // log.debug('tax_date -----> ', tax_date , " / tax_date " , typeof tax_date);
@@ -239,7 +239,6 @@ define(['N/currentRecord', 'N/url', 'N/runtime', 'N/record', 'N/search', 'N/ui/d
 
                 var input = {
                     subsidiary_id: subsidiary_id,
-                    tax_date: tax_date,
                     transaction_id: transaction_id,
                     transaction_type: transaction_type
                 }
@@ -259,9 +258,9 @@ define(['N/currentRecord', 'N/url', 'N/runtime', 'N/record', 'N/search', 'N/ui/d
                     scriptId: 'customscript_e_tax_ll_issue',        
                     deploymentId: 'customdeploy_e_tax_ll_issue',   
                     params: {
-                        array: JSON.stringify(array), /* { subsidiary_id, tax_date, transaction_id, transaction_type } */
+                        array: JSON.stringify(array), 
                         rUserId: runtime.getCurrentUser().id,
-                        std: tax_date
+                        tax_date: tax_date
                     }
                 });
 

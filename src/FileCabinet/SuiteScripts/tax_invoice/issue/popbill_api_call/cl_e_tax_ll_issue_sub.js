@@ -72,8 +72,8 @@ define(["N/url", "N/runtime", "N/search", "N/ui/dialog", 'N/https',], function (
       .then(async function (result) {
       ///------------------------------------------
         // 화면상에 있는 invoice 정보 가져오기 
-        let invoiceInfoList =  JSON.parse(getParameterFromURL('array'));
-
+        const invoiceInfoList =  JSON.parse(getParameterFromURL('array'));
+        const tax_date =  getParameterFromURL('tax_date');
 
         const batchSize = 100;
         const batchedData = [];
@@ -84,28 +84,29 @@ define(["N/url", "N/runtime", "N/search", "N/ui/dialog", 'N/https',], function (
           batchedData.push(batch);
         }
   
-        console.log("invoiceInfoList -----", invoiceInfoList)
-        console.log("batchedData.length ----", batchedData.length)
-        
-        // 1) 100건 씩 bulkSubmit 호출 (Reason: Popbill 최대 요청 건수 100건)
+        // A. 100건 씩 bulkSubmit 호출 (Reason: Popbill 최대 요청 건수 100건)
         const groupSubmitId = runtime.getCurrentUser().id + "-" +  getCurrentJulianDate();
         for (let i = 0; i < batchedData.length; i++) {
           const submitId = groupSubmitId + "-" + i;
-          const res = await createtBulkSubmitPromise(submitId, batchedData[i]);
+          const res = await postBulkSubmitPromise(tax_date,  submitId, batchedData[i]);
           const parsedRes = JSON.parse(res.body);
-          console.log('res----- ', res);
-          console.log('parsedRes----- ', parsedRes);
+          console.log('[BULKSUBMIT res] ----- ', parsedRes);
           submitIdList.push(parsedRes)
         }
   
   
-        console.log('getBulkSubmitResult 호출전  ----- ', submitIdList);
+        console.log('getBulkSubmitResult 호출전 submitIdList ----- ', submitIdList);
   
-        // 2) getBulkSubmitResult 호출 
+        // B. getBulkSubmitResult 호출 
         let idx = 0;
-        while(submitIdList.length === 0) {
-          const res = await getBulkSubmitResultPromise(submitIdList[idx]);
-          console.log('postBulkSubmit res----- ', res);
+        let cnt = 10;
+        while(!!submitIdList.length) {
+          console.log('postBulkSubmit idx----- ', idx);
+          console.log('postBulkSubmit submitIdList[idx]----- ', submitIdList[idx]);
+
+          const res = await postBulkSubmitResultPromise(submitIdList[idx]);
+          const parsedRes = JSON.parse(res.body);
+          console.log('[GETBULKSUBMITRESULT res]  parsedRes----- ', parsedRes);
           if(res.txState === 2) { 
             // 성공했을 경우 다음 submitId 결과 호출
             // GetBulkResult API : txState(접수상태)가 2(완료)일 때, 개별 세금계산서 발행결과(성공/실패) 확인이 가능
@@ -113,10 +114,9 @@ define(["N/url", "N/runtime", "N/search", "N/ui/dialog", 'N/https',], function (
           }
           
           idx++;
-          idx >=  idxArr.length ? 0 : idx;
-  
-          console.log('postBulkSubmit idxArr----- ', idxArr);
-          console.log('postBulkSubmit idx----- ', idx);
+          cnt--;
+          if(idx >=  submitIdList.length)  idx = 0;
+          if(cnt == 0) break
         }
   
   
@@ -140,7 +140,7 @@ define(["N/url", "N/runtime", "N/search", "N/ui/dialog", 'N/https',], function (
   };
 
   
-  function createtBulkSubmitPromise( SubmitID, invoiceInfoList ) { 
+  function postBulkSubmitPromise( tax_date, submitID, invoiceInfoList ) { 
         
     const restletUrl = url.resolveScript({
         scriptId: 'customscript_e_tax_ll_create',
@@ -149,15 +149,13 @@ define(["N/url", "N/runtime", "N/search", "N/ui/dialog", 'N/https',], function (
 
     const headerObj = new Array();
     headerObj['Content-Type'] = 'application/json';
-    headerObj['Accept'] = '*/*';
-    console.log("invoiceInfoList ---->", invoiceInfoList)
 
     const body = { 
-      SubmitID: SubmitID,
+      writeDate: setDateStringToYYYYMMDD(tax_date),
+      submitID: submitID,
       invoiceInfoList: invoiceInfoList
     };
 
-    console.log("body ---", body)
     return https.post.promise({
               url: restletUrl,
               headers: headerObj,
@@ -166,24 +164,27 @@ define(["N/url", "N/runtime", "N/search", "N/ui/dialog", 'N/https',], function (
   };
 
 
-  // function getBulkSubmitResultPromise( SubmitID ) { 
+  function postBulkSubmitResultPromise( submitLogRecordInfo ) { 
         
-  //   const restletUrl = url.resolveScript({
-  //       scriptId: 'customscript_ll_get_res',
-  //       deploymentId: 'customdeploy_ll_get_res'
-  //   });
+    const restletUrl = url.resolveScript({
+        scriptId: 'customscript_e_tax_ll_post_result',
+        deploymentId: 'customdeploy_e_tax_ll_post_result'
+    });
 
-  //   const headerObj = new Array();
-  //   headerObj['Content-Type'] = 'application/json';
+    const headerObj = new Array();
+    headerObj['Content-Type'] = 'application/json';
 
-  //   const body = { SubmitID };
+    const body = {
+      submitID : submitLogRecordInfo.submitID,
+      rowRecordId : submitLogRecordInfo.rowRecordId
+    };
 
-  //   return https.get.promise({
-  //             url: restletUrl,
-  //             headers: headerObj,
-  //             body: JSON.stringify(body),
-  //         });
-  // };
+    return https.post.promise({
+              url: restletUrl,
+              headers: headerObj,
+              body: JSON.stringify(body),
+          });
+  };
 
 
   function getParameterFromURL(param) {
@@ -230,14 +231,19 @@ define(["N/url", "N/runtime", "N/search", "N/ui/dialog", 'N/https',], function (
 
   
 
-
+  function setDateStringToYYYYMMDD(originalDate) {
+    const parts = originalDate.split('/');
+    const year = parts[0];
+    const month = String(parts[1]).padStart(2, '0');
+    const day = String(parts[2]).padStart(2, '0');
+    return year + month + day;
+  }
 
 
   return {
     pageInit,
     doBack,
     postBulkSubmit
-    // doAggr,
     // doRefresh,
   };
 });

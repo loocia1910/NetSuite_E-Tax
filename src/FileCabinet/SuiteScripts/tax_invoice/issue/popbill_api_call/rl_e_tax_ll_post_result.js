@@ -1,4 +1,8 @@
 
+//-----------------------------------------------------------------------------------------------------------
+// NetSuite Script Name/ID: E-TAX Tax Invoice Issue post_result / customscript_e_tax_ll_post_result
+// NetSuite DeploymentName/ID : E-TAX Tax Invoice Issue post_result / customdeploy_e_tax_ll_post_result
+//-----------------------------------------------------------------------------------------------------------
 
 /**
  * @NApiVersion 2.1
@@ -24,20 +28,24 @@ define([
     async function post(requestBody) {
         try {
             // 날짜와 검색유형이 와야함
-            const response  = {
+            let response  = {
                 txState : 0,
-            }
+            };
+            
             const parsedBody = JSON.parse(requestBody);
-            const SubmitID = JSON.parse(parsedBody.SubmitID);
-            log.debug('getBulkSubmitResult SubmitID ==== ', SubmitID);
+            const { submitID, rowRecordId } = parsedBody;
+            log.debug('post 요청__ll_post_result submitID ==== ', submitID);
+            log.debug('post 요청__ll_post_result rowRecordId ==== ', rowRecordId);
+
             
             // 1. popbill TOKEN 생성 
             // 2. popbill getBulkSubmitRes 요청
             // 3. RECODRD : TAX_INVOICE_SUBMIT_LOG 상태 저장
             // 4. RECODRD : CUSTOMER_LEDGER에서 SubmitID로 Invoice 찾기
             // 5. RECODRD : E_TAX_ESERO 결과 저장
-            const res = await getBulkSubmitResult(SubmitID);
-            log.debug('post 요청 getBulkSubmitResult res ==== ', res);
+            const res = await getBulkSubmitResult(submitID);
+            const parsedRes = JSON.parse(res);
+            log.debug('post 요청__ll_post_result getBulkSubmitResult res ==== ', res);
             log.debug("res.txState  === 2 ---- ", res.txState === 2)
 
             /**
@@ -54,7 +62,8 @@ define([
             */
             if(res.txState === 2) {
                 response.txState = 2;
-                setTIBulkSubmitLog(SubmitID);
+                setTIBulkSubmitLog(submitLogRecordInfo.rowRecordId);
+                setTIResultState()
             } 
             
 
@@ -63,19 +72,23 @@ define([
 
         } catch(err) {
             throw error.create({
-                name: 'rl_e_tax_ll_create.js post Fail',
+                name: 'rl_e_tax_ll_post_result.js post Fail',
                 message: err
             });
         }
     };
 
+    function setTIResultState () {
 
-    async function getBulkSubmitResult( SubmitID ) {
+    }
+
+
+    async function getBulkSubmitResult( submitID ) {
         try {
-            const prefix ='custscript_';
+            const prefix ='custscript_e_tax_ll_post_';
             const script = runtime.getCurrentScript();
 
-            const ENV = script.getParameter({ name : prefix + 'e_tax_env'});
+            const ENV = script.getParameter({ name : prefix + 'result_env'});
             const POPBILL_USER_ID = script.getParameter({ name : prefix + 'popbill_user_id'});
             const POPBILL_API_HOST = ENV === 'TEST' ? 'https://popbill-test.linkhub.co.kr' : 'https://popbill.linkhub.co.kr';
 
@@ -88,12 +101,12 @@ define([
 
 
             const res = await https.get({
-            url:  `${POPBILL_API_HOST}/Taxinvoice/BULK/${SubmitID}`,
+            url:  `${POPBILL_API_HOST}/Taxinvoice/BULK/${submitID}/State`,
             headers: headerObj
             }); 
             
 
-            log.debug('post 요청 getBulkSubmitResult 함수  res.body ==== ', res.body);
+            log.debug('get 요청 getBulkSubmitResult 함수  res.body ==== ', res.body);
             return JSON.parse(res.body);
 
         } catch(err) {
@@ -108,49 +121,21 @@ define([
 
 
 
-    function setCLBulkSubmitFlag(SubmitID, invoiceList) {
-        try {
-            const prefix = "custrecord_ko_cl_"
-
-            // 처리상태 P로 업데이트
-            invoiceList.forEach(rowData => {
-                let etaxRecord = record.load({
-                    type: 'customrecord_ko_customer_ledger',
-                    id: rowData.id,
-                    isDynamic: true
-                });
-
-                etaxRecord.setValue(prefix + 'flag', bulkSubmitFlags['1']);
-                etaxRecord.setValue(prefix + 'submit_id', SubmitID);
-                etaxRecord.save();
-            });
-
-
-        } catch(err) {
-            throw error.create({
-                name: 'setBulkSubmitFlag Fail',
-                message: err
-            });
-        }
-    } 
-
-
-    function setTIBulkSubmitLog(SubmitID) {
+    function setTIBulkSubmitLog(rowRecordId) {
         try {
             const prefix = "custrecord_ko_ti_log_"
-            const currentUser = runtime.getCurrentUser();
             let submitLogRecord = record.load({
                 type: 'customrecord_ko_ti_sumbit_log',
-                id: 1512
+                id: rowRecordId
             });
 
             // submitLogRecord.setValue(prefix + 'submit_id', SubmitID);
             submitLogRecord.setValue(prefix + 'result_date', new Date());
             submitLogRecord.save();
-
+            log.debug("setTIBulkSubmitLog  submitLogRecord.save() 후 : ",  submitLogRecord.save())
         } catch(err) {
             throw error.create({
-                name: 'setBulkSubmitFlag Fail',
+                name: 'setTIBulkSubmitLog Fail',
                 message: err
             });
         }
@@ -159,13 +144,13 @@ define([
 
 
     async function getToken() {
-        const prefix ='custscript_';
+        const prefix ='custscript_e_tax_ll_post_';
         const script = runtime.getCurrentScript();
 
-        const ENV = script.getParameter({ name: prefix + 'e_tax_env' });
-        const ACCESS_ID = script.getParameter({ name: prefix + 'e_tax_access_id' }); // 사업자 번호
+        const ENV = script.getParameter({ name: prefix + 'result_env' });
+        const ACCESS_ID = script.getParameter({ name: prefix + 'access_id' }); // 사업자 번호
         const LINK_ID = script.getParameter({ name: prefix + 'popbill_link_id' });
-        const SECRET_KEY = script.getParameter({ name: prefix + 'popbill_secret_key' });
+        const SECRET_KEY = script.getParameter({ name: prefix + 'popbill_s_key' });
 
 
         const Scopes = ['member', '110'];

@@ -1,4 +1,7 @@
-const { log } = require("util");
+//-----------------------------------------------------------------------------------------------------------
+// NetSuite Script Name/ID: E-TAX Tax Invoice Issue create_popbill / customscript_e_tax_ll_create
+// NetSuite DeploymentName/ID : E-TAX Tax Invoice Issue create_popbill / customdeploy_e_tax_ll_create
+//-----------------------------------------------------------------------------------------------------------
 
 
 /**
@@ -20,34 +23,31 @@ define([
     async function post(requestBody) {
         try {
             let response = {
-                SubmitID: '',
+                submitID: '',
                 rowRecordId: null
             }
             
             const parsedBody = JSON.parse(requestBody);
             const invoiceInfoList = parsedBody.invoiceInfoList;
-            const SubmitID = parsedBody.SubmitID;
+            const submitID = parsedBody.submitID;
+            const writeDate = parsedBody.writeDate;
             log.debug('post 요청__ll_create  invoiceInfoList ==== ', invoiceInfoList);
-            log.debug('post 요청__ll_create  invoiceInfoList.length ==== ', invoiceInfoList.length);
             
             // 1. record에서 개별 invoice 정보들 찾기
             // 2. 찾은 정보로 taxInvoice 리스트 생성 (submitId 생성 규칙 : 고객번 + invoice_number 사용)
             // 3. popbill TOKEN 생성 
             // 4. popbill bulkSubmit 요청
             const invoiceList = searchInvoiceList(invoiceInfoList);
-            const BulkRequestBody = setBulkReqBody(invoiceList);
-            const res = await createBulkSubmit(SubmitID, BulkRequestBody);
-            // log.debug("res ---- ", res)
+            const BulkRequestBody = setBulkReqBody(writeDate, invoiceList);
+            const res = await createBulkSubmit(submitID, BulkRequestBody);
 
             // 5. RECODRD : CUSTOMER_LEDGER bulksubmit flag 
             // 6. RECODRD : TAX_INVOICE_SUBMIT_LOG 상태 저장
             if(res.code === 1) {
-                setCLBulkSubmitFlag(SubmitID, invoiceList);  // invoiceList에서 search 되 record International ID를 가지고, submitID와 flag - '1' 일괄 저장
-                const res = setBulkSubmitLog(SubmitID)
+                setCLBulkSubmitFlag(submitID, invoiceList);  // invoiceList에서 search 되 record International ID를 가지고, submitID와 flag - '1' 일괄 저장
+                const res = setBulkSubmitLog(submitID);
                 response = res;
             }
-
-            log.debug("서버로 가기전 response --- ", response)
 
             return JSON.stringify(response);
 
@@ -60,11 +60,10 @@ define([
     };
 
 
-    function setCLBulkSubmitFlag(SubmitID, invoiceList) {
+    function setCLBulkSubmitFlag(submitID, invoiceList) {
         try {
             const prefix = "custrecord_ko_cl_"
 
-            // 처리상태 P로 업데이트
             invoiceList.forEach(rowData => {
                 let etaxRecord = record.load({
                     type: 'customrecord_ko_customer_ledger',
@@ -73,7 +72,7 @@ define([
                 });
 
                 etaxRecord.setValue(prefix + 'flag', '1'); // '1' : bulkSbumit API 호출 - yes
-                etaxRecord.setValue(prefix + 'submit_id', SubmitID);
+                etaxRecord.setValue(prefix + 'submit_id', submitID);
                 etaxRecord.save();
             });
 
@@ -87,7 +86,7 @@ define([
     } 
 
 
-    function setBulkSubmitLog(SubmitID) {
+    function setBulkSubmitLog(submitID) {
         try {
             const prefix = "custrecord_ko_ti_log_"
             const currentUser = runtime.getCurrentUser();
@@ -101,13 +100,11 @@ define([
             submitLogRecord.setValue(prefix + 'subsidiary_id', currentUser.subsidiary);
             submitLogRecord.setValue(prefix + 'creator_id', currentUser.id);
             submitLogRecord.setValue(prefix + 'creator', currentUser.name);
-            submitLogRecord.setValue(prefix + 'submit_id', SubmitID);
+            submitLogRecord.setValue(prefix + 'submit_id', submitID);
             submitLogRecord.setValue(prefix + 'request_date', new Date());
             submitLogRecord.save();
 
-            log.debug('submitLogRecord.save 후 submitLogRecord.id ---', submitLogRecord.id);
-
-            return { SubmitID, rowRecordId : submitLogRecord.id }
+            return { submitID, rowRecordId : submitLogRecord.id }
         } catch(err) {
             throw error.create({
                 name: 'setBulkSubmitFlag Fail',
@@ -123,14 +120,16 @@ define([
             if (paramArray) {
                 for (let obj of paramArray) {
                     transactionFilters.push([prefix + 'transaction_id', search.Operator.IS, obj.transaction_id]);
-                    transactionFilters.push('and')
-                    transactionFilters.push([prefix + 'flag', search.Operator.ISNOT, '1'], 'and', [prefix + 'flag', search.Operator.ISNOT, '2']) // flag 값이 '1'이나 '2'가 아닌 것 (bulkSbumit 또는 getBulkSumbitResult 호출하지 않은 것)
+                    // transactionFilters.push('and')
+                    // transactionFilters.push([[prefix + 'flag', search.Operator.ISNOT, '1'], 'and', [prefix + 'flag', search.Operator.ISNOT, '2']]) // flag 값이 '1'이나 '2'가 아닌 것 (bulkSbumit 또는 getBulkSumbitResult 호출하지 않은 것)
                     transactionFilters.push('or')
                     //transactionFilters.push([ [prefix + 'flag', search.Operator.ISNOT, '1'], 'and', [prefix + 'flag', search.Operator.ISNOT, '2'] ]) // flag 값이 '1'이나 '2'가 아닌 것 (bulkSbumit 또는 getBulkSumbitResult 호출하지 않은 것)
                 }
 
                 transactionFilters.pop(); // 마지막 'or' 제거
             }
+
+            log.debug('transactionFilters ', transactionFilters);
             
             /* transaction_id 를 DESC 하기 위한 컬럼변수 */
             const tranIdCol = search.createColumn({
@@ -190,6 +189,8 @@ define([
                 return true;
             });
 
+            log.debug("Search 로 찾은 results ---", results)
+            log.debug("Search 로 찾은 results.length ---", results.length)
 
             return results;
 
@@ -197,7 +198,7 @@ define([
 
     
 
-    const setBulkReqBody = (reqList) => {
+    const setBulkReqBody = (writeDate, reqList) => {
         log.debug('setBulkReqBody/reqList', reqList);
         log.debug('setBulkReqBody/reqList.length', reqList.length);
 
@@ -206,7 +207,7 @@ define([
 
         for(let el of reqList) {
             let taxinvoice = {
-                writeDate: el.tax_date,          // 작성일자,
+                writeDate: writeDate,          // 작성일자,
                 chargeDirection: "정과금" ,       //  "정과금" / "역과금" ,   --> !!!변경필요
                 issueType: "정발행",           //  "정발행" / "역발행" / "위수탁"   --> !!!변경필요
                 taxType: "과세",   //  "과세" / "영세" / "면세"
@@ -233,8 +234,10 @@ define([
 
     }
 
-    async function createBulkSubmit( SubmitID, BulkRequestBody ) {
+    async function createBulkSubmit( submitID, BulkRequestBody ) {
         try {
+            log.debug("[createBulkSubmit] BulkRequestBody ", BulkRequestBody)
+
             const prefix ='custscript_';
             const script = runtime.getCurrentScript();
 
@@ -249,7 +252,7 @@ define([
             headerObj['Authorization'] = API_Session_Token;
             headerObj['x-pb-userid'] = POPBILL_USER_ID;
             headerObj['X-HTTP-Method-Override'] = 'BULKISSUE';
-            headerObj['x-pb-submit-id'] = SubmitID;
+            headerObj['x-pb-submit-id'] = submitID;
             headerObj['x-pb-message-digest'] = MessageDigest;
             headerObj['Content-Type'] = 'application/json';
             headerObj['Accept'] = '*/*';
@@ -261,8 +264,6 @@ define([
             body: stringify(BulkRequestBody)
             }); 
             
-
-            log.debug('post 요청 createBulkSubmit 함수  res.body ==== ', res.body);
             return JSON.parse(res.body);
 
         } catch(err) {
