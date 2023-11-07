@@ -45,11 +45,8 @@ define(["N/url", "N/runtime", "N/search", "N/ui/dialog", 'N/https',], function (
     window.history.back();
   }
 
-  async function postBulkSubmit() {
+  function postBulkSubmit() {
     try {
-      // 화면상에 있는 invoice 정보 가져오기 
-      let invoiceInfoList = getParameterFromURL('array');
-
 
       dialog.create({
         title: "NOTICE",
@@ -72,8 +69,65 @@ define(["N/url", "N/runtime", "N/search", "N/ui/dialog", 'N/https',], function (
         //   '</div>',
         // buttons: [{ label: "확인", value: "true" }],
       })
-      .then(function (result) {
-        console.log(result);
+      .then(async function (result) {
+      ///------------------------------------------
+        // 화면상에 있는 invoice 정보 가져오기 
+        let invoiceInfoList =  JSON.parse(getParameterFromURL('array'));
+
+
+        const batchSize = 100;
+        const batchedData = [];
+        const submitIdList = [];
+
+        // for (let i = 0; i < JSON.parse(invoiceInfoList).length; i += batchSize) {
+        //   const batch = JSON.parse(invoiceInfoList).slice(i, i + batchSize);
+        //   batchedData.push(batch);
+        // }
+  
+        console.log("invoiceInfoList -----", invoiceInfoList)
+        // console.log("batchedData -length ----", batchedData.length)
+        
+        // 1) 100건 씩 bulkSubmit 호출 (Reason: Popbill 최대 요청 건수 100건)
+        //   * 
+        // const groupSubmitId = runtime.getCurrentUser().id + "-" +  getCurrentJulianDate();
+        // for (let i = 0; i < batchedData.length; i++) {
+        //   // 전자세금계산서 정보를 서버로 전
+        //   const submitId = groupSubmitId + "-" + i;
+        //   console.log("batchedData[i] ---- ", batchedData[i])
+        
+          const res = await createtBulkSubmitPromise('hello-test', invoiceInfoList);
+          const parsedRes = JSON.parse(res.body);
+          console.log('postBulkSubmit res----- ', parsedRes);
+        //   submitIdList.push(parsedRes.SubmitID)
+        // }
+  
+  
+        // console.log('getBulkSubmitResult 호출전  ----- ', submitIdList);
+  
+        // 2) getBulkSubmitResult 호출 
+        // let idx = 0;
+        // while(submitIdList.length === 0) {
+        //   const res = await getBulkSubmitResultPromise(submitIdList[idx]);
+        //   console.log('postBulkSubmit res----- ', res);
+        //   if(res.txState === 2) { 
+        //     // 성공했을 경우 다음 submitId 결과 호출
+        //     // GetBulkResult API : txState(접수상태)가 2(완료)일 때, 개별 세금계산서 발행결과(성공/실패) 확인이 가능
+        //     submitIdList.shift();
+        //   }
+          
+        //   idx++;
+        //   idx >=  idxArr.length ? 0 : idx;
+  
+        //   console.log('postBulkSubmit idxArr----- ', idxArr);
+        //   console.log('postBulkSubmit idx----- ', idx);
+        // }
+  
+  
+        // dialog.alert({
+        //     title: 'Message',
+        //     message: "bulkSubmit성공"
+        // });
+      ///------------------------------------------
       })
       .catch(function (reason) {
         dialog.alert({
@@ -82,55 +136,6 @@ define(["N/url", "N/runtime", "N/search", "N/ui/dialog", 'N/https',], function (
         });
       });
 
-
-
-      const batchSize = 1;
-      const batchedData = [];
-      const submitIdList = [];
-
-      for (let i = 0; i < sortedExcelFile.length; i += batchSize) {
-        const batch = sortedExcelFile.slice(i, i + batchSize);
-        batchedData.push(batch);
-      }
-      
-      // 1) 100건 씩 bulkSubmit 호출 (Reason: Popbill 최대 요청 건수 100건)
-      //   * 
-      const groupSubmitId = runtime.getCurrentUser().id + "-" +  getCurrentJulianDate();
-      for (let i = 0; i < batchedData.length; i++) {
-        // 전자세금계산서 정보를 서버로 전달
-        const submitId = groupSubmitId + "-" + i;
-        const res = await createtBulkSubmitPromise(submitId, invoiceInfoList);
-        const parsedRes = JSON.parse(res.body);
-        console.log('postBulkSubmit res----- ', parsedRes);
-        submitIdList.push(parsedRes.SubmitID)
-      }
-
-
-      console.log('getBulkSubmitResult 호출전  ----- ', submitIdList);
-
-      // 2) getBulkSubmitResult 호출 
-      // let idx = 0;
-      // while(submitIdList.length === 0) {
-      //   const res = await getBulkSubmitResultPromise(submitIdList[idx]);
-      //   console.log('postBulkSubmit res----- ', res);
-      //   if(res.txState === 2) { 
-      //     // 성공했을 경우 다음 submitId 결과 호출
-      //     // GetBulkResult API : txState(접수상태)가 2(완료)일 때, 개별 세금계산서 발행결과(성공/실패) 확인이 가능
-      //     submitIdList.shift();
-      //   }
-        
-      //   idx++;
-      //   idx >=  idxArr.length ? 0 : idx;
-
-      //   console.log('postBulkSubmit idxArr----- ', idxArr);
-      //   console.log('postBulkSubmit idx----- ', idx);
-      // }
-
-
-      dialog.alert({
-          title: 'Message',
-          message: "bulkSubmit성공"
-      });
 
       } catch(e) {
           throw(e);
@@ -147,9 +152,15 @@ define(["N/url", "N/runtime", "N/search", "N/ui/dialog", 'N/https',], function (
 
     const headerObj = new Array();
     headerObj['Content-Type'] = 'application/json';
+    headerObj['Accept'] = '*/*';
+    console.log("invoiceInfoList ---->", invoiceInfoList)
 
-    const body = { invoiceInfoList, SubmitID };
+    const body = { 
+      SubmitID: SubmitID,
+      invoiceInfoList: invoiceInfoList
+    };
 
+    console.log("body ---", body)
     return https.post.promise({
               url: restletUrl,
               headers: headerObj,
@@ -158,24 +169,24 @@ define(["N/url", "N/runtime", "N/search", "N/ui/dialog", 'N/https',], function (
   };
 
 
-  function getBulkSubmitResultPromise( SubmitID ) { 
+  // function getBulkSubmitResultPromise( SubmitID ) { 
         
-    const restletUrl = url.resolveScript({
-        scriptId: 'customscript_ll_get_res',
-        deploymentId: 'customdeploy_ll_get_res'
-    });
+  //   const restletUrl = url.resolveScript({
+  //       scriptId: 'customscript_ll_get_res',
+  //       deploymentId: 'customdeploy_ll_get_res'
+  //   });
 
-    const headerObj = new Array();
-    headerObj['Content-Type'] = 'application/json';
+  //   const headerObj = new Array();
+  //   headerObj['Content-Type'] = 'application/json';
 
-    const body = { SubmitID };
+  //   const body = { SubmitID };
 
-    return https.get.promise({
-              url: restletUrl,
-              headers: headerObj,
-              body: JSON.stringify(body),
-          });
-  };
+  //   return https.get.promise({
+  //             url: restletUrl,
+  //             headers: headerObj,
+  //             body: JSON.stringify(body),
+  //         });
+  // };
 
 
   function getParameterFromURL(param) {

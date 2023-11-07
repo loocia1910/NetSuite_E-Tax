@@ -216,8 +216,8 @@ define(['N/currentRecord', 'N/url', 'N/runtime', 'N/record', 'N/search', 'N/ui/d
             // log.debug('tax_date -----> ', tax_date , " / tax_date " , typeof tax_date);
             // log.debug('tax_date_val -----> ', tax_date_val , " / tax_date_val " , typeof tax_date_val);
 
-            // var tax_date_obj;
-            // if (tax_date !== '') tax_date_obj = new Date(tax_date);
+            var tax_date_obj;
+            if (tax_date !== '') tax_date_obj = new Date(tax_date);
             /*
                 ※ 2020.10.08 오전 수정내역 : TAX_DATE .getValue -> .getText로 변경 후 obj 변수 신설하여 간단한 Validate
                 :: getText로 가져와야 사용자가 입력한 필드 일자 그대로를 가져올 수 있음
