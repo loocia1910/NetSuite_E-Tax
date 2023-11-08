@@ -33,14 +33,14 @@ define([
     const searchInvoiceList = (paramArray) => {
         // subsidiary_id, transaction_id
             const prefix = 'custrecord_ko_cl_';
-            let transactionFilters = [];
+            let filters = [];
             /* transaction_id 필터 생성 */
             if (paramArray) {
                 for (let obj of paramArray) {
-                    transactionFilters.push([prefix + 'transaction_id', search.Operator.IS, obj.transaction_id]);
-                    transactionFilters.push('or')
+                    filters.push([prefix + 'transaction_id', search.Operator.IS, obj.transaction_id]);
+                    filters.push('or')
                 }
-                transactionFilters.pop();
+                filters.pop();
             }
             
             /* transaction_id 를 DESC 하기 위한 컬럼변수 */
@@ -70,7 +70,7 @@ define([
                     // prefix + 'transaction_type',
                     // prefix + 'date_tax_point',
                 ],
-                filters: transactionFilters
+                filters: filters
             });
 
 

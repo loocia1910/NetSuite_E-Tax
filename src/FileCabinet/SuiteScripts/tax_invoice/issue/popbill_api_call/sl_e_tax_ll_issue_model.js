@@ -91,6 +91,8 @@ define(['N/search', 'N/record', 'N/error', 'N/runtime'],
                     prefix + 'memo',
                     prefix + 'posting',
                     prefix + 'flag',
+                    prefix + 'popbill_code',
+                    prefix + 'popbill_message',
                     prefix + 'status',
                 ],
                 filters: transactionFilters
@@ -113,6 +115,8 @@ define(['N/search', 'N/record', 'N/error', 'N/runtime'],
                     res.custlist_tax_amount = result.getValue(prefix + 'tax_amount');
                     res.custlist_tax_code = switchTaxCode(result.getValue(prefix + 'tax_code'), search);
                     res.custlist_service_tax_date = result.getValue(prefix+'service_tax_date');
+                    res.popbill_code = result.getValue(prefix+'popbill_code');
+                    res.popbill_message = result.getValue(prefix+'popbill_message');
                     res.custlist_service_tax_date = params.std;
                     res.custlist_popbill_code = "";
                     res.custlist_popbill_massage = "";

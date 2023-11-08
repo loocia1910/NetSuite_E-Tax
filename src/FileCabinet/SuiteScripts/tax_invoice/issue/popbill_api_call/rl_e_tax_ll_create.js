@@ -212,9 +212,9 @@ define([
                 issueType: "정발행",           //  "정발행" / "역발행" / "위수탁"   --> !!!변경필요
                 taxType: "과세",   //  "과세" / "영세" / "면세"
                 purposeType: "영수" ,                 // "영수" / "청구" / "없음" ,  --> !!!확인필요
-                supplyCostTotal: el.custlist_amount,        // 공급가액 합계,
-                taxTotal: el.tax_amount,                    // 세액 합계,
-                totalAmount: el.net_amount,                 // 합계금액,
+                supplyCostTotal: '150000',        // 공급가액 합계, el.custlist_amount
+                taxTotal: '15000',                    // 세액 합계,  el.tax_amount
+                totalAmount: '165000',                 // 합계금액, el.net_amount
                 invoicerMgtKey: el.id + "_" + el.subsidiary_id + "_" + el.document_number ,              // 공급자 문서번호, (5687_1_INV-KOR-59)
                 invoicerCorpNum: "1234567890",             // 공급자 사업자번호,
                 invoicerCorpName: "윌러스테스트",            // 공급자 상호,
